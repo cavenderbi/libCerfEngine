@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <type_traits>
 
 #include <cerfengine/engine.h>
 #include <cerfengine/arm/arm_cpu.h>
@@ -13,59 +14,57 @@ namespace cerfengine {
 
 CERFENGINE_REGISTER(ArmNeon2RegScalar);
 
+namespace {
+
+template<class Input, bool kMultiply, bool kSubtract>
+void ScalarLong(cerfengine::ArmCpuState& state, uint32_t d, uint32_t n,
+                uint32_t m, uint32_t index) {
+    using Output = std::conditional_t<sizeof(Input) == 2u, uint32_t, uint64_t>;
+    using Wide = std::conditional_t<std::is_signed_v<Input>, int64_t, uint64_t>;
+    Input scalar;
+    std::memcpy(&scalar, reinterpret_cast<const uint8_t*>(&state.vfp_d[m]) + index * sizeof(Input),
+                sizeof(Input));
+    Input inputs[8u / sizeof(Input)];
+    std::memcpy(inputs, &state.vfp_d[n], sizeof(inputs));
+    Output result[8u / sizeof(Input)];
+    if constexpr (!kMultiply) std::memcpy(result, &state.vfp_d[d], sizeof(result));
+    for (uint32_t lane = 0; lane < 8u / sizeof(Input); ++lane) {
+        const Output product = static_cast<Output>(static_cast<Wide>(inputs[lane]) *
+                                                   static_cast<Wide>(scalar));
+        if constexpr (kMultiply) result[lane] = product;
+        else if constexpr (kSubtract) result[lane] -= product;
+        else result[lane] += product;
+    }
+    std::memcpy(&state.vfp_d[d], result, sizeof(result));
+}
+
+template<class Input>
+void DispatchScalarLong(cerfengine::ArmCpuState& state, uint32_t op, uint32_t d,
+                        uint32_t n, uint32_t m, uint32_t index) {
+    if (op == ArmNeon2RegScalar::kS2sMull) ScalarLong<Input, true, false>(state, d, n, m, index);
+    else if (op == ArmNeon2RegScalar::kS2sMlsl) ScalarLong<Input, false, true>(state, d, n, m, index);
+    else ScalarLong<Input, false, false>(state, d, n, m, index);
+}
+
+}
+
 void ArmNeon2RegScalar::HandleScalarMlsMlaLong(uint32_t op, uint32_t d_idx,
                                                uint32_t n_idx, uint32_t m_idx,
                                                uint32_t esize, uint32_t index,
                                                uint32_t u) {
-    auto* state = engine_.Get<ArmCpu>().State();
-    const uint32_t in_ebytes  = esize / 8u;
-    const uint32_t out_ebytes = 2u * in_ebytes;
-    const uint32_t elements   = 8u / in_ebytes;
-    const uint32_t sh         = 64u - esize;
-    const bool is_mull     = (op == kS2sMull);
-    const bool is_subtract = (op == kS2sMlsl);
-    const bool is_unsigned = (u != 0u);
-
-    uint64_t scalar_raw = 0;
-    std::memcpy(&scalar_raw,
-                reinterpret_cast<const uint8_t*>(&state->vfp_d[m_idx]) +
-                    index * in_ebytes,
-                in_ebytes);
-
-    const uint8_t* dn = reinterpret_cast<const uint8_t*>(&state->vfp_d[n_idx]);
-
-    uint8_t dd[16] = {0};
-    if (!is_mull) {
-        std::memcpy(dd,     &state->vfp_d[d_idx],     8);
-        std::memcpy(dd + 8, &state->vfp_d[d_idx + 1], 8);
+    auto& state = *engine_.Get<ArmCpu>().State();
+    switch (esize) {
+    case 16u:
+        if (u) DispatchScalarLong<uint16_t>(state, op, d_idx, n_idx, m_idx, index);
+        else DispatchScalarLong<int16_t>(state, op, d_idx, n_idx, m_idx, index);
+        return;
+    case 32u:
+        if (u) DispatchScalarLong<uint32_t>(state, op, d_idx, n_idx, m_idx, index);
+        else DispatchScalarLong<int32_t>(state, op, d_idx, n_idx, m_idx, index);
+        return;
+    default:
+        engine_.Panic("ArmNeon2RegScalar: invalid long scalar element size %u", esize);
     }
-
-    uint8_t res[16];
-    for (uint32_t e = 0; e < elements; ++e) {
-        uint64_t op1_raw = 0;
-        std::memcpy(&op1_raw, dn + e * in_ebytes, in_ebytes);
-
-        uint64_t product;
-        if (is_unsigned) {
-            product = op1_raw * scalar_raw;
-        } else {
-            const int64_t op1_s    = static_cast<int64_t>(op1_raw   << sh) >> sh;
-            const int64_t scalar_s = static_cast<int64_t>(scalar_raw << sh) >> sh;
-            product = static_cast<uint64_t>(op1_s * scalar_s);
-        }
-
-        uint64_t result;
-        if (is_mull) {
-            result = product;
-        } else {
-            uint64_t accum = 0;
-            std::memcpy(&accum, dd + e * out_ebytes, out_ebytes);
-            result = is_subtract ? (accum - product) : (accum + product);
-        }
-        std::memcpy(res + e * out_ebytes, &result, out_ebytes);
-    }
-    std::memcpy(&state->vfp_d[d_idx],     res,     8);
-    std::memcpy(&state->vfp_d[d_idx + 1], res + 8, 8);
 }
 
 void CERFENGINE_CDECL ArmNeon2RegScalar::HandleScalarMlsMlaLongHelper(ArmNeon2RegScalar* svc,
