@@ -72,9 +72,9 @@ uint8_t* X86SoftTlb::EmitDirect(uint8_t* cursor, uint32_t privilege, TlbAccess a
     EmitCmpRegBaseDisp32(cursor, kEax, kEdx, e.tag);
     miss[nmiss++] = EmitJnzLabel32(cursor);
 
-    EmitMovRegBaseDisp32      (cursor, kEax, kMmuReg, model_.context_aux);
     EmitTestByteBaseDisp32Imm8(cursor, kEdx, e.global, 0xFF);
     uint8_t* context_ok = EmitJnzLabel(cursor);
+    EmitMovRegBaseDisp32      (cursor, kEax, kMmuReg, model_.context_aux);
     EmitCmpReg8BaseDisp32     (cursor, kAl, kEdx, e.context);
     miss[nmiss++] = EmitJnzLabel32(cursor);
     FixupLabel(context_ok, cursor);
@@ -135,9 +135,9 @@ uint8_t* X86SoftTlb::EmitMiss(uint8_t* cursor, uint32_t privilege, TlbAccess acc
         EmitCmpRegBaseDisp32(cursor, kEax, kEdx, e.tag);
         io_miss[n_io_miss++] = EmitJnzLabel32(cursor);
 
-        EmitMovRegBaseDisp32      (cursor, kEax, kMmuReg, model_.context_aux);
         EmitTestByteBaseDisp32Imm8(cursor, kEdx, e.global, 0xFF);
         uint8_t* context_ok = EmitJnzLabel(cursor);
+        EmitMovRegBaseDisp32      (cursor, kEax, kMmuReg, model_.context_aux);
         EmitCmpReg8BaseDisp32     (cursor, kAl, kEdx, e.context);
         io_miss[n_io_miss++] = EmitJnzLabel32(cursor);
         FixupLabel(context_ok, cursor);
