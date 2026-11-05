@@ -132,7 +132,7 @@ GuestEngine::RunStatus ArmJit::Run() {
     }
 
     if (channel_->TakeHostRequest()) host_requests_->ServiceRequests();
-    host::ClockDispatch(clock_);
+    if (ArmCycleDeadlineReached(*cpu_state_)) host::ClockDispatch(clock_);
 
     /* QEMU cpu_handle_interrupt (cpu-exec.c): "Clear the interrupt
        flag now since we're processing cpu->interrupt_request and
