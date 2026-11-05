@@ -56,10 +56,15 @@ CERFENGINE_FORCEINLINE uint64_t ArmIrMemorySlowPath::AbortAs(uint32_t va, const 
         mmu_->ClearIoPending();
         return kExit;
     }
-    if constexpr (kStore) {
-        ArmRoutedAccess::IoStoreHelper<kMmio>(access_, d.guest_pc, va, value);
-    } else {
-        value = Extend(ArmRoutedAccess::IoLoadHelper<kMmio>(access_, d.guest_pc, va), kWidth, kSign);
+    try {
+        if constexpr (kStore) {
+            ArmRoutedAccess::IoStoreHelper<kMmio>(access_, d.guest_pc, va, value);
+        } else {
+            value = Extend(ArmRoutedAccess::IoLoadHelper<kMmio>(access_, d.guest_pc, va), kWidth, kSign);
+        }
+    } catch (const MmioExternalAbort&) {
+        mmu_->RaiseExternalAbort(va, kStore);
+        return RaiseAbort(d, wb, kWb);
     }
     if constexpr (kWb) StoreSlot(d.writeback_slot, wb + d.wb_add);
     if constexpr (kStop) {

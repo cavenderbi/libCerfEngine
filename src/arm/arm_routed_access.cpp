@@ -109,8 +109,13 @@ bool ArmRoutedAccess::Load(uint32_t guest_pc, uint32_t va, uint32_t bytes, uint3
     if (!mmu_->io_pending()) {
         return false;
     }
-    *out = DispatchRead(pa, bytes, guest_pc, va);
-    return true;
+    try {
+        *out = DispatchRead(pa, bytes, guest_pc, va);
+        return true;
+    } catch (const MmioExternalAbort&) {
+        mmu_->RaiseExternalAbort(va, false);
+        return false;
+    }
 }
 
 /* DDI 0406C.c A8.8.332 VLDM Operation, p. A8-923; A8.8.333 VLDR Operation,
@@ -170,8 +175,13 @@ bool ArmRoutedAccess::Store(uint32_t guest_pc, uint32_t va, uint32_t bytes, uint
     if (!mmu_->io_pending()) {
         return false;
     }
-    DispatchWrite(pa, bytes, value, guest_pc, va);
-    return true;
+    try {
+        DispatchWrite(pa, bytes, value, guest_pc, va);
+        return true;
+    } catch (const MmioExternalAbort&) {
+        mmu_->RaiseExternalAbort(va, true);
+        return false;
+    }
 }
 
 }

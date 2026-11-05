@@ -105,6 +105,7 @@ ArmTranslation CERFENGINE_FASTCALL ArmWalk(void* context, uint32_t mva, bool use
 bool CERFENGINE_FASTCALL ArmProbeWalk(void* context, uint32_t mva, uint32_t control,
                                       uint32_t* pa);
 void CERFENGINE_FASTCALL ArmAlignmentFault(void* context, uint32_t va, bool is_write);
+void CERFENGINE_FASTCALL ArmExternalAbort(void* context, uint32_t va, bool is_write);
 
 }
 

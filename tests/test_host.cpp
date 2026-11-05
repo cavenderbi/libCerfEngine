@@ -67,3 +67,7 @@ void CERFENGINE_FASTCALL ArmAlignmentFault(void* context, uint32_t va, bool is_w
 }
 
 }
+
+void CERFENGINE_FASTCALL cerfengine::host::ArmExternalAbort(void* context, uint32_t va, bool is_write) {
+    static_cast<TestArmSystem*>(context)->RecordExternalAbort(va, is_write);
+}

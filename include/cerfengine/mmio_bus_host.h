@@ -8,6 +8,8 @@
 
 namespace cerfengine {
 
+struct MmioExternalAbort {};
+
 enum class MmioWidth : uint32_t { kByte = 1u, kHalf = 2u, kWord = 4u, kDword = 8u };
 
 /* ARM DDI 0406C.c A8.8.68 LDRB (p. A8-418), A8.8.80 LDRH (p. A8-442): a byte

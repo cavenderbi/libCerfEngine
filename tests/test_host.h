@@ -89,6 +89,7 @@ public:
 
     void ObserveCycles(const uint32_t* counter) { observed_cycles_ = counter; }
     void EnableMmioLog() { mmio_log_mode_ = true; }
+    void AbortMmio() { mmio_abort_ = true; }
     void RaiseExitOnMmio(uint32_t* word, uint32_t bit) {
         exit_word_ = word;
         exit_bit_  = bit;
@@ -227,13 +228,15 @@ private:
         ++trace_hits_;
     }
 
-    static uint32_t CERFENGINE_CDECL RouteRead(void*, uint32_t offset, uint32_t) {
+    static uint32_t CERFENGINE_CDECL RouteRead(void* context, uint32_t offset, uint32_t) {
+        if (static_cast<TestHost*>(context)->mmio_abort_) throw cerfengine::MmioExternalAbort{};
         TestFail("unexpected MMIO read at offset 0x%X", offset);
     }
 
     static void CERFENGINE_CDECL RouteWrite(void* context, uint32_t offset, uint32_t value,
                                             uint32_t width_bytes) {
         auto* self = static_cast<TestHost*>(context);
+        if (self->mmio_abort_) throw cerfengine::MmioExternalAbort{};
         if (offset != 0u || width_bytes != 4u) {
             TestFail("unexpected MMIO write at offset 0x%X width %u", offset, width_bytes);
         }
@@ -292,6 +295,7 @@ private:
     uint8_t*              data_;
     uint32_t              mmio_pa_;
     std::atomic<uint32_t> generation_{0};
+    bool                  mmio_abort_      = false;
     bool                  mmio_written_    = false;
     uint64_t              mmio_value_      = 0;
     bool                  mmio_log_mode_   = false;
@@ -341,6 +345,12 @@ public:
         last_fault_va_    = va;
         last_fault_write_ = write;
     }
+    void RecordExternalAbort(uint32_t va, bool write) {
+        ++external_aborts_;
+        last_fault_va_ = va;
+        last_fault_write_ = write;
+    }
+    uint32_t ExternalAborts() const { return external_aborts_; }
     uint32_t AlignmentFaults() const { return alignment_faults_; }
     uint32_t LastFaultVa() const { return last_fault_va_; }
     bool     LastFaultWrite() const { return last_fault_write_; }
@@ -398,6 +408,7 @@ private:
 
     bool     allow_alignment_faults_ = false;
     uint32_t alignment_faults_       = 0;
+    uint32_t external_aborts_        = 0;
     uint32_t last_fault_va_          = 0;
     bool     last_fault_write_       = false;
     bool     walk_enabled_           = false;

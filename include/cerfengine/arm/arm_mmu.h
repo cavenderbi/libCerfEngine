@@ -84,6 +84,10 @@ public:
     uint32_t* IoPendingValidPtr()   { return &io_pending_valid_; }
 
     void RaiseAlignmentFault(uint32_t va, bool is_write);
+    void RaiseExternalAbort(uint32_t va, bool is_write) {
+        ClearIoPending();
+        host::ArmExternalAbort(alignment_fault_, va, is_write);
+    }
 
     static void CERFENGINE_FASTCALL AlignmentFaultReadHelper(uint32_t va, ArmMmu* mmu);
     static void CERFENGINE_FASTCALL AlignmentFaultWriteHelper(uint32_t va, ArmMmu* mmu);
